@@ -1,11 +1,14 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+
 	"github.com/go-kit/kit/endpoint"
 	"golang.org/x/net/context"
 )
 
-const auth_ctx_key = "AUTH_UUID"
+const auth_ctxKey = "AUTH_CONTEXT_KEY"
 
 type Authenticator interface {
 	Authenticated() endpoint.Middleware
@@ -13,13 +16,17 @@ type Authenticator interface {
 }
 
 type authenticator struct {
-	uuid  string
-	authN AuthNFunc
-	authZ AuthZFunc
+	ctxKey string
+	authN  AuthNFunc
+	authZ  AuthZFunc
 }
 
-func NewAuthenticator(uuid string, authN AuthNFunc, authZ AuthZFunc) Authenticator {
-	return &authenticator{uuid: auth_ctx_key + "_" + uuid, authN: authN, authZ: authZ}
+func NewAuthenticator(secret string, authN AuthNFunc, authZ AuthZFunc) Authenticator {
+	return &authenticator{ctxKey: auth_ctxKey + "_" +
+		hex.EncodeToString(sha256.New().Sum([]byte(secret))),
+		authN: authN,
+		authZ: authZ,
+	}
 }
 
 func (a *authenticator) Authenticated() endpoint.Middleware {
@@ -32,7 +39,8 @@ func (a *authenticator) Authenticated() endpoint.Middleware {
 
 			if p, ok = i.(Principal); ok {
 				if a.authN(p) {
-					return next(context.WithValue(ctx, a.uuid, p), i)
+					chain := context.WithValue(ctx, a.ctxKey, p)
+					return next(context.WithValue(chain, a.ctxKey, p), i)
 				}
 				return nil, &Unauthenticated{}
 			}
@@ -51,7 +59,7 @@ func (a *authenticator) Authorized() endpoint.Middleware {
 				s  Subject
 				p  Principal
 			)
-			if p, ok = ctx.Value(a.uuid).(Principal); !ok {
+			if p, ok = ctx.Value(a.ctxKey).(Principal); !ok {
 				return nil, &UnknownPrincipal{}
 			}
 			if s, ok = i.(Subject); ok {
