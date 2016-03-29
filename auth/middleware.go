@@ -51,7 +51,7 @@ func (a *authenticator) Authorized() endpoint.Middleware {
 				s  Subject
 				p  Principal
 			)
-			if p, ok = ctx.Value(uuid).(Principal); !ok {
+			if p, ok = ctx.Value(a.uuid).(Principal); !ok {
 				return nil, &UnknownPrincipal{}
 			}
 			if s, ok = i.(Subject); ok {
