@@ -2,9 +2,10 @@ package auth
 
 import (
 	"github.com/go-kit/kit/endpoint"
-	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 )
+
+const auth_ctx_key = "AUTH_UUID"
 
 type Authenticator interface {
 	Authenticated() endpoint.Middleware
@@ -17,8 +18,8 @@ type authenticator struct {
 	authZ AuthZFunc
 }
 
-func NewAuthenticator(authN AuthNFunc, authZ AuthZFunc) Authenticator {
-	return &authenticator{uuid.New(), authN: authN, authZ: authZ}
+func NewAuthenticator(uuid string, authN AuthNFunc, authZ AuthZFunc) Authenticator {
+	return &authenticator{uuid: auth_ctx_key + "_" + uuid, authN: authN, authZ: authZ}
 }
 
 func (a *authenticator) Authenticated() endpoint.Middleware {
