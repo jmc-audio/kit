@@ -8,7 +8,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-const auth_ctxKey = "AUTH_CONTEXT_KEY"
+const auth_ctx_principal = "AUTH_PRINCIPAL"
+const auth_ctx_subject = "AUTH_SUBJECT"
 
 type Authenticator interface {
 	Authenticated() endpoint.Middleware
@@ -16,14 +17,13 @@ type Authenticator interface {
 }
 
 type authenticator struct {
-	ctxKey string
+	secret string
 	authN  AuthNFunc
 	authZ  AuthZFunc
 }
 
 func NewAuthenticator(secret string, authN AuthNFunc, authZ AuthZFunc) Authenticator {
-	return &authenticator{ctxKey: auth_ctxKey + "_" +
-		hex.EncodeToString(sha256.New().Sum([]byte(secret))),
+	return &authenticator{secret: hex.EncodeToString(sha256.New().Sum([]byte(secret))),
 		authN: authN,
 		authZ: authZ,
 	}
@@ -39,8 +39,7 @@ func (a *authenticator) Authenticated() endpoint.Middleware {
 
 			if p, ok = i.(Principal); ok {
 				if a.authN(p) {
-					chain := context.WithValue(ctx, a.ctxKey, p)
-					return next(context.WithValue(chain, a.ctxKey, p), i)
+					return next(context.WithValue(ctx, auth_ctx_principal, p), i)
 				}
 				return nil, &Unauthenticated{}
 			}
@@ -59,7 +58,7 @@ func (a *authenticator) Authorized() endpoint.Middleware {
 				s  Subject
 				p  Principal
 			)
-			if p, ok = ctx.Value(a.ctxKey).(Principal); !ok {
+			if p, ok = ctx.Value(auth_ctx_principal).(Principal); !ok {
 				return nil, &UnknownPrincipal{}
 			}
 			if s, ok = i.(Subject); ok {
@@ -67,7 +66,7 @@ func (a *authenticator) Authorized() endpoint.Middleware {
 					return nil, &UnknownSubject{}
 				}
 				if a.authZ(p, s) {
-					return next(ctx, i)
+					return next(context.WithValue(ctx, auth_ctx_subject, s), i)
 				}
 				return nil, &Unauthorized{}
 			}
